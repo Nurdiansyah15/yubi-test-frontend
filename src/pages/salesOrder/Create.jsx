@@ -112,23 +112,29 @@ export default function Create() {
     let subAmount = 0;
     let totalDiscount = 0;
 
-    soDetails.forEach((item) => {
-      const price = parseFloat(item.price) || 0;
-      const qty = parseFloat(item.qty) || 0;
+    soDetails
+      .filter((item) => !item.isDeleted)
+      .forEach((item) => {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseFloat(item.qty) || 0;
 
-      let discAmount = 0;
-      if (item.discPercent && item.discPercent !== "") {
-        const discPercent = parseFloat(item.discPercent) || 0;
-        discAmount = (price * qty * discPercent) / 100;
-      } else if (item.discAmount && item.discAmount !== "") {
-        discAmount = parseFloat(item.discAmount) || 0;
-      }
+        let discAmount = 0;
+        if (
+          item.discPercent &&
+          item.discPercent !== "" &&
+          parseFloat(item.discPercent) !== 0
+        ) {
+          const discPercent = parseFloat(item.discPercent) || 0;
+          discAmount = (price * qty * discPercent) / 100;
+        } else if (item.discAmount && item.discAmount !== "") {
+          discAmount = parseFloat(item.discAmount) || 0;
+        }
 
-      const total = price * qty;
+        const total = price * qty;
 
-      subAmount += total;
-      totalDiscount += discAmount;
-    });
+        subAmount += total;
+        totalDiscount += discAmount;
+      });
 
     const afterDiscount = subAmount - totalDiscount;
     const grandTotal = afterDiscount;
@@ -180,24 +186,27 @@ export default function Create() {
     if (!salesOrders.buyerAddress.trim())
       newErrors.buyerAddress = "Buyer Address is required";
 
-    salesOrders.soDts.forEach((item, idx) => {
-      const itemError = {};
-      if (!item.refType) itemError.refType = "Required";
-      if (!item.refNum) itemError.refNum = "Required";
-      if (!item.itemType) itemError.itemType = "Required";
-      if (!item.productCode) itemError.productCode = "Required";
-      if (!item.productName) itemError.productName = "Required";
-      if (!item.unit) itemError.unit = "Required";
-      if (!item.price) itemError.price = "Required";
-      if (!item.qty) itemError.qty = "Required";
+    salesOrders.soDts
+      .filter((item) => !item.isDeleted)
+      .forEach((item, idx) => {
+        const itemError = {};
+        if (!item.refType) itemError.refType = "Required";
+        if (!item.refNum) itemError.refNum = "Required";
+        if (!item.itemType) itemError.itemType = "Required";
+        if (!item.productCode) itemError.productCode = "Required";
+        if (!item.productName) itemError.productName = "Required";
+        if (!item.unit) itemError.unit = "Required";
+        if (!item.price) itemError.price = "Required";
+        if (!item.qty) itemError.qty = "Required";
 
-      if (Object.keys(itemError).length > 0) {
-        newItemErrors[idx] = itemError;
-      }
-    });
+        if (Object.keys(itemError).length > 0) {
+          newItemErrors[idx] = itemError;
+        }
+      });
 
     setSoErrors(newErrors);
     setSoDtErrors(newItemErrors);
+    console.log(newItemErrors);
 
     const isValid =
       Object.keys(newErrors).length === 0 && newItemErrors.length === 0;
@@ -243,6 +252,7 @@ export default function Create() {
           products.find((c) => c.code === item.productCode)?.id || "",
         item_unit_id: parseInt(item.unit) || 0,
         price_sell: parseFloat(item.price) || 0,
+        is_deleted: item.isDeleted || false,
         qty: parseFloat(item.qty) || 0,
         disc_perc: parseFloat(item.discPercent) || 0,
         disc_am: parseFloat(item.discAmount) || 0,
@@ -250,9 +260,15 @@ export default function Create() {
       }));
 
       await Promise.all(
-        soDtPayloads.map((detail) =>
-          salesOrderDetailService.createDetail(createdSalesOrderId, detail)
-        )
+        soDtPayloads.map((detail) => {
+          if (!detail.is_deleted) {
+            return salesOrderDetailService.createDetail(
+              createdSalesOrderId,
+              detail
+            );
+          }
+          return Promise.resolve();
+        })
       );
 
       CustomToast("Sales order dan semua detail berhasil dikirim!", "success");

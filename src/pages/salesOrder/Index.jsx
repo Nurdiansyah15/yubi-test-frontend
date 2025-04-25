@@ -21,7 +21,7 @@ export default function Index() {
   const fetchSalesOrders = async () => {
     try {
       const response = await salesOrderService.getAllSalesOrders();
-      setSalesOrders(response.data.data);
+      setSalesOrders(response.data.data || []);
       console.log("data", response.data);
     } catch (error) {
       console.log("Error fetching sales orders:", error);

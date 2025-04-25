@@ -70,25 +70,29 @@ export default function Edit() {
         await salesOrderDetailService.getAllDetailsBySalesOrderId(
           parseInt(salesOrderId)
         );
-      const parsedSoDetails = response.data.data.map((item) => ({
-        id: item.id,
-        refType: item.ref_type || "",
-        refNum: item.ref_type || "",
-        itemType: item.item_type || "",
-        productCode:
-          products.find((p) => p.id === item.product_uuid)?.code || "",
-        productName:
-          products.find((p) => p.id === item.product_uuid)?.code || "",
-        unit: item.item_unit_id?.toString() || "",
-        price: item.price_sell?.toString() || "",
-        qty: item.qty?.toString() || "",
-        discPercent: item.disc_perc?.toString() || "",
-        discAmount: item.disc_am?.toString() || "",
-        totalAmount: item.total_am?.toString() || "",
-        remark: item.remark || "",
-      }));
-
-      setSoDetails(parsedSoDetails);
+      if (response.data.data !== null) {
+        setSoDetails(() => {
+          return response.data.data?.map((item) => ({
+            id: item.id,
+            refType: item.ref_type || "",
+            refNum: item.ref_type || "",
+            itemType: item.item_type || "",
+            productCode:
+              products.find((p) => p.id === item.product_uuid)?.code || "",
+            productName:
+              products.find((p) => p.id === item.product_uuid)?.code || "",
+            unit: item.item_unit_id?.toString() || "",
+            price: item.price_sell?.toString() || "",
+            qty: item.qty?.toString() || "",
+            discPercent: item.disc_perc?.toString() || "",
+            discAmount: item.disc_am?.toString() || "",
+            totalAmount: item.total_am?.toString() || "",
+            remark: item.remark || "",
+          }));
+        });
+      } else {
+        setSoDetails([]);
+      }
 
       console.log("data", response.data);
     } catch (error) {
@@ -195,23 +199,29 @@ export default function Edit() {
     let subAmount = 0;
     let totalDiscount = 0;
 
-    soDetails.forEach((item) => {
-      const price = parseFloat(item.price) || 0;
-      const qty = parseFloat(item.qty) || 0;
+    soDetails
+      .filter((item) => !item.isDeleted)
+      .forEach((item) => {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseFloat(item.qty) || 0;
 
-      let discAmount = 0;
-      if (item.discPercent && item.discPercent !== "") {
-        const discPercent = parseFloat(item.discPercent) || 0;
-        discAmount = (price * qty * discPercent) / 100;
-      } else if (item.discAmount && item.discAmount !== "") {
-        discAmount = parseFloat(item.discAmount) || 0;
-      }
+        let discAmount = 0;
+        if (
+          item.discPercent &&
+          item.discPercent !== "" &&
+          parseFloat(item.discPercent) !== 0
+        ) {
+          const discPercent = parseFloat(item.discPercent) || 0;
+          discAmount = (price * qty * discPercent) / 100;
+        } else if (item.discAmount && item.discAmount !== "") {
+          discAmount = parseFloat(item.discAmount) || 0;
+        }
 
-      const total = price * qty;
+        const total = price * qty;
 
-      subAmount += total;
-      totalDiscount += discAmount;
-    });
+        subAmount += total;
+        totalDiscount += discAmount;
+      });
 
     const afterDiscount = subAmount - totalDiscount;
     const grandTotal = afterDiscount;
@@ -263,21 +273,23 @@ export default function Edit() {
     if (!salesOrders.buyerAddress.trim())
       newErrors.buyerAddress = "Buyer Address is required";
 
-    salesOrders.soDts.forEach((item, idx) => {
-      const itemError = {};
-      if (!item.refType) itemError.refType = "Required";
-      if (!item.refNum) itemError.refNum = "Required";
-      if (!item.itemType) itemError.itemType = "Required";
-      if (!item.productCode) itemError.productCode = "Required";
-      if (!item.productName) itemError.productName = "Required";
-      if (!item.unit) itemError.unit = "Required";
-      if (!item.price) itemError.price = "Required";
-      if (!item.qty) itemError.qty = "Required";
+    salesOrders.soDts
+      .filter((item) => !item.isDeleted)
+      .forEach((item, idx) => {
+        const itemError = {};
+        if (!item.refType) itemError.refType = "Required";
+        if (!item.refNum) itemError.refNum = "Required";
+        if (!item.itemType) itemError.itemType = "Required";
+        if (!item.productCode) itemError.productCode = "Required";
+        if (!item.productName) itemError.productName = "Required";
+        if (!item.unit) itemError.unit = "Required";
+        if (!item.price) itemError.price = "Required";
+        if (!item.qty) itemError.qty = "Required";
 
-      if (Object.keys(itemError).length > 0) {
-        newItemErrors[idx] = itemError;
-      }
-    });
+        if (Object.keys(itemError).length > 0) {
+          newItemErrors[idx] = itemError;
+        }
+      });
 
     setSoErrors(newErrors);
     setSoDtErrors(newItemErrors);
@@ -334,20 +346,29 @@ export default function Edit() {
         disc_perc: parseFloat(item.discPercent) || 0,
         disc_am: parseFloat(item.discAmount) || 0,
         total_am: parseFloat(item.totalAmount) || 0,
+        is_deleted: item.isDeleted || false,
         remark: item.remark || "",
       }));
 
       await Promise.all(
         soDtPayloads.map((detail) => {
-          if (detail.id && !isNaN(detail.id)) {
+          if (detail.id && detail.is_deleted) {
+            return salesOrderDetailService.deleteDetail(soId, detail.id);
+          }
+
+          if (detail.id && !detail.is_deleted) {
             return salesOrderDetailService.updateDetail(
               soId,
               detail.id,
               detail
             );
-          } else {
+          }
+
+          if (!detail.id && !detail.is_deleted) {
             return salesOrderDetailService.createDetail(soId, detail);
           }
+
+          return Promise.resolve();
         })
       );
 

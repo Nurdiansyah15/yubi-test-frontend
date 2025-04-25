@@ -236,14 +236,11 @@ export default function SalesOrderForm({
               <label className="col-span-1 text-sm font-medium text-gray-600 px-2 py-1 rounded">
                 {label}
               </label>
-              <input
-                type="number"
-                name={name}
-                value={salesOrders[name]}
-                onChange={handleChange}
-                className="col-span-1 border border-gray-300 p-2 rounded text-gray-500 bg-gray-100"
-                disabled
-              />
+              <div className="px-5 py-2 col-span-1 border border-gray-300 p-2 rounded text-gray-500 bg-gray-100">
+                <p className="font-semibold">
+                  {parseFloat(salesOrders[name]).toLocaleString("id", "ID")}
+                </p>
+              </div>
             </React.Fragment>
           ))}
         </div>

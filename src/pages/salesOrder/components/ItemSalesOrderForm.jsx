@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useRef } from "react";
 import { FaTrash } from "react-icons/fa";
 import { itemTypes, products, unitTypes } from "../../../data/data";
 import { salesOrderDetailService } from "../../../services/salesOrderDetailService";
 import { useParams } from "react-router-dom";
 import CustomToast from "../../../components/global/CustomToast";
+import { GrCycle } from "react-icons/gr";
+import { GiCycle } from "react-icons/gi";
 
 export default function ItemSalesOrderForm({
   soDetails,
@@ -37,28 +39,49 @@ export default function ItemSalesOrderForm({
   //   setSoDetails(updatedItems);
   // };
 
-  const handleDeleteRow = async (index) => {
-    const itemToDelete = soDetails[index];
+  // const handleDeleteRow = async (index) => {
+  //   const itemToDelete = soDetails[index];
 
-    // Jika item sudah punya id (berarti sudah tersimpan di DB), panggil API delete
-    if (itemToDelete.id && !isNaN(parseInt(itemToDelete.id)) && salesOrderId) {
-      try {
-        await salesOrderDetailService.deleteDetail(
-          parseInt(salesOrderId),
-          parseInt(itemToDelete.id)
-        );
-        await CustomToast("Detail berhasil dihapus dari server", "success");
-      } catch (error) {
-        console.error("Gagal menghapus detail dari server:", error);
-        CustomToast("Gagal hapus detail dari server", "error");
-        return; // keluar supaya tidak dihapus dari state jika gagal
-      }
-    }
+  //   // Jika item sudah punya id (berarti sudah tersimpan di DB), panggil API delete
+  //   if (itemToDelete.id && !isNaN(parseInt(itemToDelete.id)) && salesOrderId) {
+  //     try {
+  //       await salesOrderDetailService.deleteDetail(
+  //         parseInt(salesOrderId),
+  //         parseInt(itemToDelete.id)
+  //       );
+  //       await CustomToast("Detail berhasil dihapus dari server", "success");
+  //     } catch (error) {
+  //       console.error("Gagal menghapus detail dari server:", error);
+  //       CustomToast("Gagal hapus detail dari server", "error");
+  //       return; // keluar supaya tidak dihapus dari state jika gagal
+  //     }
+  //   }
 
-    // Lanjut hapus dari state
-    const updatedItems = soDetails.filter((_, i) => i !== index);
-    setSoDetails(updatedItems);
+  //   // Lanjut hapus dari state
+  //   const updatedItems = soDetails.filter((_, i) => i !== index);
+  //   setSoDetails(updatedItems);
+  // };
+
+  const handleDeleteRow = (index) => {
+    setSoDetails((prevDetails) => {
+      const updatedDetails = [...prevDetails];
+      updatedDetails[index] = { ...updatedDetails[index], isDeleted: true };
+      return updatedDetails;
+    });
   };
+
+  const handleRestoreRow = (index) => {
+    setSoDetails((prevDetails) => {
+      const updatedDetails = [...prevDetails];
+      updatedDetails[index] = {
+        ...updatedDetails[index],
+        isDeleted: false,
+      };
+      return updatedDetails;
+    });
+  };
+
+  console.log("soDetails", soDetails);
 
   const handleChange = (index, field, value) => {
     setSoDetails((prevItems) => {
@@ -91,6 +114,24 @@ export default function ItemSalesOrderForm({
       updated[index] = item;
       return updated;
     });
+  };
+
+  const inputRefs = useRef({});
+
+  const handleArrowKey = (e, rowIndex, colIndex) => {
+    const key = e.key;
+    let nextRow = rowIndex;
+    let nextCol = colIndex;
+
+    if (key === "ArrowRight") nextCol++;
+    else if (key === "ArrowLeft") nextCol--;
+    else if (key === "ArrowDown") nextRow++;
+    else if (key === "ArrowUp") nextRow--;
+
+    const nextInput = inputRefs.current[`${nextRow}-${nextCol}`];
+    if (nextInput) {
+      nextInput.focus();
+    }
   };
 
   return (
@@ -130,125 +171,206 @@ export default function ItemSalesOrderForm({
             </thead>
 
             <tbody>
-              {soDetails.map((item, index) => (
-                <tr key={index} className="odd:bg-gray-50 border-b">
-                  {[
-                    { name: "refType" },
-                    { name: "refNum" },
-                    {
-                      name: "itemType",
-                      type: "select",
-                      options: itemTypes.map((i) => ({
-                        value: i.id,
-                        label: i.name,
-                      })),
-                    },
-                    {
-                      name: "productCode",
-                      type: "select",
-                      options: products.map((p) => ({
-                        value: p.code,
-                        label: `${p.code}`,
-                      })),
-                    },
-                    {
-                      name: "productName",
-                      type: "select",
-                      options: products.map((p) => ({
-                        value: p.code,
-                        label: `${p.name}`,
-                      })),
-                    },
-                    {
-                      name: "unit",
-                      type: "select",
-                      options: unitTypes.map((u) => ({
-                        value: u.id,
-                        label: u.name,
-                      })),
-                    },
-                    { name: "price" },
-                    { name: "qty" },
-                    { name: "discPercent" },
-                    { name: "discAmount" },
-                    { name: "totalAmount", disabled: true },
-                    { name: "remark" },
-                  ].map(({ name, type = "text", options = [], disabled }) => (
-                    <td
-                      key={name}
-                      className="border border-gray-300 px-2 py-1 align-top"
-                    >
-                      {type === "select" ? (
-                        <>
-                          <select
-                            value={item[name]}
-                            onChange={(e) =>
-                              handleChange(index, name, e.target.value)
-                            }
-                            disabled={disabled || isViewOnly}
-                            className={`w-full px-1 py-2 text-sm rounded focus:outline-none focus:ring-1 ${
-                              name === "totalAmount"
-                                ? "text-right text-gray-700 bg-gray-200"
-                                : "bg-white"
-                            } ${
-                              soDtErrors?.[index]?.[name]
-                                ? "border border-red-500 ring-red-400"
-                                : "border border-gray-300"
-                            }`}
+              {soDetails
+                .map((item, index) => ({ ...item, originalIndex: index }))
+                .sort((a, b) => {
+                  return (a.isDeleted === true) - (b.isDeleted === true);
+                })
+                .map((item) => (
+                  <tr
+                    key={item.originalIndex}
+                    className={`odd:bg-gray-50 border-b ${
+                      item.isDeleted ? "opacity-50 line-through" : ""
+                    }`}
+                  >
+                    {[
+                      { name: "refType" },
+                      { name: "refNum" },
+                      {
+                        name: "itemType",
+                        type: "select",
+                        options: itemTypes.map((i) => ({
+                          value: i.id,
+                          label: i.name,
+                        })),
+                      },
+                      {
+                        name: "productCode",
+                        type: "select",
+                        options: products.map((p) => ({
+                          value: p.code,
+                          label: `${p.code}`,
+                        })),
+                      },
+                      {
+                        name: "productName",
+                        type: "select",
+                        options: products.map((p) => ({
+                          value: p.code,
+                          label: `${p.name}`,
+                        })),
+                      },
+                      {
+                        name: "unit",
+                        type: "select",
+                        options: unitTypes.map((u) => ({
+                          value: u.id,
+                          label: u.name,
+                        })),
+                      },
+                      { name: "price", type: "number" },
+                      { name: "qty", type: "number" },
+                      { name: "discPercent", type: "number" },
+                      { name: "discAmount", type: "number" },
+                      { name: "totalAmount", disabled: true, type: "number" },
+                      { name: "remark" },
+                    ].map(
+                      (
+                        { name, type = "text", options = [], disabled },
+                        colIndex
+                      ) => (
+                        <td
+                          key={name}
+                          className="border border-gray-300 px-2 py-1 align-top"
+                        >
+                          {type === "select" ? (
+                            <>
+                              <select
+                                value={item[name]}
+                                onChange={(e) =>
+                                  handleChange(
+                                    item.originalIndex,
+                                    name,
+                                    e.target.value
+                                  )
+                                }
+                                disabled={
+                                  disabled || isViewOnly || item.isDeleted
+                                }
+                                onKeyDown={(e) => {
+                                  const arrowKeys = [
+                                    "ArrowUp",
+                                    "ArrowDown",
+                                    "ArrowLeft",
+                                    "ArrowRight",
+                                  ];
+
+                                  if (arrowKeys.includes(e.key)) {
+                                    e.preventDefault();
+                                    handleArrowKey(
+                                      e,
+                                      item.originalIndex,
+                                      colIndex
+                                    );
+                                  }
+                                }}
+                                ref={(el) => {
+                                  inputRefs.current[
+                                    `${item.originalIndex}-${colIndex}`
+                                  ] = el;
+                                }}
+                                className={`w-full px-1 py-2 text-sm rounded focus:outline-none focus:ring-1 ${
+                                  name === "totalAmount"
+                                    ? "text-right text-gray-700 bg-gray-200"
+                                    : "bg-white"
+                                } ${
+                                  soDtErrors?.[item.originalIndex]?.[name]
+                                    ? "border border-red-500 ring-red-400"
+                                    : "border border-gray-300"
+                                }`}
+                              >
+                                <option value="">Select...</option>
+                                {options.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                              {soDtErrors?.[item.originalIndex]?.[name] && (
+                                <p className="text-xs text-red-600 mt-1">
+                                  {soDtErrors[item.originalIndex][name]}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type={type}
+                                value={item[name]}
+                                min={0}
+                                onKeyDown={(e) => {
+                                  const arrowKeys = [
+                                    "ArrowUp",
+                                    "ArrowDown",
+                                    "ArrowLeft",
+                                    "ArrowRight",
+                                  ];
+
+                                  if (arrowKeys.includes(e.key)) {
+                                    e.preventDefault();
+                                    handleArrowKey(
+                                      e,
+                                      item.originalIndex,
+                                      colIndex
+                                    );
+                                  }
+                                }}
+                                onChange={(e) =>
+                                  handleChange(
+                                    item.originalIndex,
+                                    name,
+                                    e.target.value
+                                  )
+                                }
+                                ref={(el) => {
+                                  inputRefs.current[
+                                    `${item.originalIndex}-${colIndex}`
+                                  ] = el;
+                                }}
+                                disabled={
+                                  disabled || isViewOnly || item.isDeleted
+                                }
+                                className={`w-full px-1 py-2 text-sm rounded focus:outline-none focus:ring-1 ${
+                                  name === "totalAmount"
+                                    ? "text-right text-gray-700 bg-gray-200"
+                                    : "bg-white"
+                                } ${
+                                  soDtErrors?.[item.originalIndex]?.[name]
+                                    ? "border border-red-500 ring-red-400"
+                                    : "border border-gray-300"
+                                }`}
+                              />
+                              {soDtErrors?.[item.originalIndex]?.[name] && (
+                                <p className="text-xs text-red-600 mt-1">
+                                  {soDtErrors[item.originalIndex][name]}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      )
+                    )}
+                    {!isViewOnly && (
+                      <td className="px-2 py-2 border text-center">
+                        {!item.isDeleted ? (
+                          <button
+                            onClick={() => handleDeleteRow(item.originalIndex)}
+                            className="text-red-600 hover:text-red-800 cursor-pointer"
                           >
-                            <option value="">Select...</option>
-                            {options.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          {soDtErrors?.[index]?.[name] && (
-                            <p className="text-xs text-red-600 mt-1">
-                              {soDtErrors[index][name]}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type={type}
-                            value={item[name]}
-                            onChange={(e) =>
-                              handleChange(index, name, e.target.value)
-                            }
-                            disabled={disabled || isViewOnly}
-                            className={`w-full px-1 py-2 text-sm rounded focus:outline-none focus:ring-1 ${
-                              name === "totalAmount"
-                                ? "text-right text-gray-700 bg-gray-200"
-                                : "bg-white"
-                            } ${
-                              soDtErrors?.[index]?.[name]
-                                ? "border border-red-500 ring-red-400"
-                                : "border border-gray-300"
-                            }`}
-                          />
-                          {soDtErrors?.[index]?.[name] && (
-                            <p className="text-xs text-red-600 mt-1">
-                              {soDtErrors[index][name]}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </td>
-                  ))}
-                  {!isViewOnly && (
-                    <td className="px-2 py-2 border text-center">
-                      <button
-                        onClick={() => handleDeleteRow(index)}
-                        className="text-red-600 hover:text-red-800 cursor-pointer"
-                      >
-                        <FaTrash />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
+                            <FaTrash />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRestoreRow(item.originalIndex)}
+                            className="text-blue-600 hover:text-blue-800 cursor-pointer"
+                          >
+                            <GiCycle />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
               {soDetails.length === 0 && (
                 <tr>
                   <td
